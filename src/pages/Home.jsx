@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { Link } from 'react-router-dom';
 import { getIcon } from '../utils/iconUtils';
 import MainFeature from '../components/MainFeature';
 
@@ -10,6 +11,8 @@ const UsersIcon = getIcon('users');
 const BriefcaseIcon = getIcon('briefcase');
 const CalendarIcon = getIcon('calendar');
 const FileTextIcon = getIcon('file-text');
+const ClockIcon = getIcon('clock');
+const DollarSignIcon = getIcon('dollar-sign');
 const TrendingUpIcon = getIcon('trending-up');
 
 // Mock data for dashboard
@@ -18,6 +21,8 @@ const initialStats = [
   { id: 2, name: 'Current Projects', value: 8, icon: 'briefcase', color: 'bg-purple-100 dark:bg-purple-900/20', textColor: 'text-purple-600 dark:text-purple-400' },
   { id: 3, name: 'Upcoming Meetings', value: 5, icon: 'calendar', color: 'bg-green-100 dark:bg-green-900/20', textColor: 'text-green-600 dark:text-green-400' },
   { id: 4, name: 'Pending Invoices', value: 3, icon: 'file-text', color: 'bg-amber-100 dark:bg-amber-900/20', textColor: 'text-amber-600 dark:text-amber-400' },
+  { id: 5, name: 'Hours Tracked', value: 42.5, icon: 'clock', color: 'bg-blue-100 dark:bg-blue-900/20', textColor: 'text-blue-600 dark:text-blue-400' },
+  { id: 6, name: 'Billable Amount', value: '$3,825', icon: 'dollar-sign', color: 'bg-green-100 dark:bg-green-900/20', textColor: 'text-green-600 dark:text-green-400' },
 ];
 
 // Custom hook for managing clients
@@ -123,6 +128,24 @@ function Home() {
           
           {/* Main Feature Section */}
           <MainFeature onAddClient={addClient} />
+
+          {/* Time Tracking Quick Links */}
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="card card-hover">
+              <h3 className="text-xl font-semibold mb-4 flex items-center">
+                <ClockIcon className="mr-2 text-primary" /> Time Tracking
+              </h3>
+              <p className="text-surface-600 dark:text-surface-400 mb-4">Track billable hours and categorize your work by client and project.</p>
+              <Link to="/time-tracking" className="btn-primary inline-block">Start Tracking Time</Link>
+            </div>
+            <div className="card card-hover">
+              <h3 className="text-xl font-semibold mb-4 flex items-center">
+                <DollarSignIcon className="mr-2 text-primary" /> Invoicing
+              </h3>
+              <p className="text-surface-600 dark:text-surface-400 mb-4">Generate invoices automatically from your tracked time and send them to clients.</p>
+              <Link to="/invoices" className="btn-primary inline-block">Manage Invoices</Link>
+            </div>
+          </div>
           
           {/* Recent Activity */}
           <div className="mt-12">

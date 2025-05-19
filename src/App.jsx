@@ -7,6 +7,8 @@ import { Menu, X, Sun, Moon } from 'lucide-react';
 // Pages
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
+import TimeTracking from './pages/TimeTracking';
+import Invoices from './pages/Invoices';
 
 function App() {
   const location = useLocation();
@@ -43,6 +45,8 @@ function App() {
             <a href="/" className="text-surface-600 hover:text-primary transition-colors">Dashboard</a>
             <a href="#clients" className="text-surface-600 hover:text-primary transition-colors">Clients</a>
             <a href="#projects" className="text-surface-600 hover:text-primary transition-colors">Projects</a>
+            <a href="/time-tracking" className="text-surface-600 hover:text-primary transition-colors">Time Tracking</a>
+            <a href="/invoices" className="text-surface-600 hover:text-primary transition-colors">Invoices</a>
             <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors">
               {darkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
@@ -75,6 +79,8 @@ function App() {
                 <a href="/" className="py-2 text-surface-600 hover:text-primary transition-colors">Dashboard</a>
                 <a href="#clients" className="py-2 text-surface-600 hover:text-primary transition-colors">Clients</a>
                 <a href="#projects" className="py-2 text-surface-600 hover:text-primary transition-colors">Projects</a>
+                <a href="/time-tracking" className="py-2 text-surface-600 hover:text-primary transition-colors">Time Tracking</a>
+                <a href="/invoices" className="py-2 text-surface-600 hover:text-primary transition-colors">Invoices</a>
               </div>
             </motion.div>
           )}
@@ -86,6 +92,8 @@ function App() {
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<Home />} />
+            <Route path="/time-tracking" element={<TimeTracking />} />
+            <Route path="/invoices" element={<Invoices />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AnimatePresence>
