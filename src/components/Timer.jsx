@@ -3,7 +3,6 @@ import { Play, Pause, StopCircle, X } from 'lucide-react';
 
 function Timer({ isRunning, startTime, onStart, onStop, onCancel }) {
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [timer, setTimer] = useState(null);
 
   // Format time for display (HH:MM:SS)
   const formatTime = (time) => {
@@ -43,17 +42,14 @@ function Timer({ isRunning, startTime, onStart, onStop, onCancel }) {
       
       // Set interval to update timer every second
       const intervalId = setInterval(updateTimer, 1000);
-      setTimer(intervalId);
 
       return () => clearInterval(intervalId);
     } else {
-      if (timer) {
-        clearInterval(timer);
-        setTimer(null);
-      }
       setElapsedTime(0);
+      // No need to clear interval here, as the effect cleanup function
+      // will handle it when isRunning changes to false
     }
-  }, [isRunning, startTime, timer]);
+  }, [isRunning, startTime]);
 
   return (
     <div className="flex flex-col bg-surface-100 dark:bg-surface-700 rounded-lg p-4">
