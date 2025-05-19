@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
+import { AuthContext } from '../App';
+import { format } from 'date-fns';
 import { Plus, Clock, Filter, Edit, Trash2, Calendar, Briefcase, Tag, DollarSign } from 'lucide-react';
 
 // Components
@@ -10,13 +12,24 @@ import TimeEntryForm from '../components/TimeEntryForm';
 
 // Redux actions
 import { 
-  addTimeEntry, 
-  updateTimeEntry, 
-  deleteTimeEntry, 
+  setTimeEntries,
+  setLoading,
+  addTimeEntry,
+  updateTimeEntry,
+  deleteTimeEntry,
   startTimer, 
   stopTimer, 
   cancelTimer 
 } from '../redux/slices/timeTrackingSlice';
+
+// Services
+import { 
+  fetchTimeEntries, 
+  createTimeEntry, 
+  updateTimeEntry as updateTimeEntryService,
+  deleteTimeEntry as deleteTimeEntryService
+} from '../services/timeEntryService';
+import { getClients, getClientById } from '../services/clientService';
 
 // Mock client data - in a real app, this would come from an API
 const clients = [
@@ -27,7 +40,9 @@ const clients = [
 
 function TimeTracking() {
   const dispatch = useDispatch();
-  const { timeEntries, categories, activeTimer } = useSelector((state) => state.timeTracking);
+  const { user } = useSelector((state) => state.user);
+  const { timeEntries, categories, activeTimer, loading } = useSelector((state) => state.timeTracking);
+  const { isAuthenticated } = useContext(AuthContext);
   
   // Local state
   const [showForm, setShowForm] = useState(false);
@@ -35,13 +50,52 @@ function TimeTracking() {
   const [filterClient, setFilterClient] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterBillable, setFilterBillable] = useState('all');
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDate, setFilterDate] = useState(''); 
+  
+  // Fetch time entries when component mounts
+  useEffect(() => {
+    async function loadTimeEntries() {
+      try {
+        dispatch(setLoading(true));
+        const entries = await fetchTimeEntries();
+        
+        // Transform entries to match the component's expected structure
+        const formattedEntries = entries.map(entry => ({
+          id: entry.Id,
+          client: entry.client,
+          projectId: entry.project,
+          description: entry.description,
+          categoryId: entry.category,
+          date: entry.date,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          duration: parseFloat(entry.duration),
+          rate: parseFloat(entry.rate),
+          billable: entry.billable === true,
+          invoiced: entry.invoiced === true,
+          invoiceId: entry.invoiceId
+        }));
+        
+        dispatch(setTimeEntries(formattedEntries));
+      } catch (error) {
+        console.error('Error loading time entries:', error);
+        toast.error('Failed to load time entries. Please try again later.');
+        dispatch(setLoading(false));
+      }
+    }
+    
+    if (user?.Id) {
+      loadTimeEntries();
+    }
+  }, [dispatch, user?.Id]);
   
   // Filtered entries
   const filteredEntries = timeEntries.filter(entry => {
-    if (filterClient && entry.clientId !== parseInt(filterClient)) return false;
-    if (filterCategory && entry.categoryId !== filterCategory) return false;
-    if (filterBillable !== 'all' && entry.billable !== (filterBillable === 'billable')) return false;
+    // Updated to handle string client values from database
+    if (filterClient && entry.client !== filterClient) return false;
+    if (filterCategory && entry.categoryId !== filterCategory &&
+      entry.category !== filterCategory) return false;
+    if (filterBillable !== 'all' && entry.billable !== (filterBillable === 'billable')) return false; 
     if (filterDate && entry.date !== filterDate) return false;
     return true;
   });
@@ -49,13 +103,13 @@ function TimeTracking() {
   // Sort entries by date and start time (newest first)
   const sortedEntries = [...filteredEntries].sort((a, b) => {
     if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
-    return a.startTime > b.startTime ? 1 : -1;
+    return a.startTime > b.startTime ? 1 : -1; 
   });
   
   // Get client name by ID
-  const getClientName = (clientId) => {
-    const client = clients.find(c => c.id === clientId);
-    return client ? client.name : 'Unknown Client';
+  const getClientName = (client) => {
+    // If client is already a name string, just return it
+    return client || 'Unknown Client';
   };
   
   // Get category by ID
@@ -94,34 +148,83 @@ function TimeTracking() {
   const handleOpenForm = (entry = null) => {
     setCurrentEntry(entry);
     setShowForm(true);
-  };
+
   
-  const handleCloseForm = () => {
-    setShowForm(false);
-    setCurrentEntry(null);
-  };
-  
-  const handleSubmitForm = (formData) => {
-    if (currentEntry) {
-      // Update existing entry
+    // Show loading state
+    dispatch(setLoading(true));
+    
+    async function saveTimeEntry() {
+      try {
+        if (currentEntry) {
+          // Update existing entry
+          const updatedEntry = await updateTimeEntryService(currentEntry.id, {
+            Name: `Time entry for ${formData.client}`,
+            ...formData,
+            // Ensure we're using the right field names for the database
+            client: formData.client,
+            category: formData.categoryId
+          });
+          
+          dispatch(updateTimeEntry({
+            id: currentEntry.id,
+            ...formData
+          }));
+          toast.success('Time entry updated!');
+        } else {
+          // Add new entry
+          const newEntry = await createTimeEntry({
+            Name: `Time entry for ${formData.client}`,
+            ...formData,
+            // Ensure we're using the right field names for the database
+            client: formData.client,
+            category: formData.categoryId
+          });
+          
+          dispatch(addTimeEntry({
+            id: newEntry.Id,
+            ...formData
+          }));
+          toast.success('Time entry added!');
+        }
+      } catch (error) {
+        console.error('Error saving time entry:', error);
+        toast.error('Failed to save time entry. Please try again.');
+      } finally {
+        dispatch(setLoading(false));
+        handleCloseForm();
+      }
       dispatch(updateTimeEntry({ id: currentEntry.id, ...formData }));
-      toast.success('Time entry updated!');
+    
+    saveTimeEntry();
     } else {
-      // Add new entry
-      dispatch(addTimeEntry(formData));
-      toast.success('Time entry added!');
-    }
-    handleCloseForm();
-  };
-  
-  // Handle delete entry
-  const handleDeleteEntry = (id) => {
+
     if (confirm('Are you sure you want to delete this time entry?')) {
       dispatch(deleteTimeEntry(id));
       toast.success('Time entry deleted!');
     }
   };
   
+    
+  // Handle delete entry
+  const handleDeleteEntry = (id) => {
+    if (confirm('Are you sure you want to delete this time entry?')) {
+      // Show loading state
+      dispatch(setLoading(true));
+      
+      deleteTimeEntryService(id)
+        .then(() => {
+          dispatch(deleteTimeEntry(id));
+          toast.success('Time entry deleted!');
+        })
+        .catch(error => {
+          console.error('Error deleting time entry:', error);
+          toast.error('Failed to delete time entry. Please try again.');
+        })
+        .finally(() => {
+          dispatch(setLoading(false));
+        });
+    }
+  };
   // Calculate total hours
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
   
@@ -218,38 +321,46 @@ function TimeTracking() {
       </div>
       
       {/* Filters and Time Entries */}
-      <div className="card mb-8">
+      <div className="card mb-8 relative">
+        {loading && (
+          <div className="absolute inset-0 bg-white/70 dark:bg-surface-800/70 flex items-center justify-center z-10">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        )}
+        
         <div className="flex flex-col md:flex-row md:items-center mb-6 space-y-3 md:space-y-0 md:space-x-4">
           <div className="flex items-center text-surface-600 dark:text-surface-400">
             <Filter className="w-4 h-4 mr-2" /> Filters:
           </div>
           
           <select 
-            value={filterClient} 
-            onChange={(e) => setFilterClient(e.target.value)}
+            value={filterClient}
+            onChange={(e) => setFilterClient(e.target.value)} 
             className="input-field max-w-xs"
           >
             <option value="">All Clients</option>
-            {clients.map(client => (
-              <option key={client.id} value={client.id}>{client.name}</option>
-            ))}
+            <option value="Acme Corporation">Acme Corporation</option>
+            <option value="Globex Industries">Globex Industries</option>
+            <option value="Stark Enterprises">Stark Enterprises</option>
           </select>
           
           <select 
-            value={filterCategory} 
+            value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
             className="input-field max-w-xs"
           >
             <option value="">All Categories</option>
-            {categories.map(category => (
-              <option key={category.id} value={category.id}>{category.name}</option>
-            ))}
+            <option value="Development">Development</option>
+            <option value="Design">Design</option>
+            <option value="Meeting">Meeting</option>
+            <option value="Research">Research</option>
+            <option value="Administrative">Administrative</option>
           </select>
           
           <select 
-            value={filterBillable} 
+            value={filterBillable}
             onChange={(e) => setFilterBillable(e.target.value)}
-            className="input-field max-w-xs"
+            className="input-field max-w-xs" 
           >
             <option value="all">All Entries</option>
             <option value="billable">Billable Only</option>
@@ -269,7 +380,7 @@ function TimeTracking() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-surface-100 dark:bg-surface-700 text-left">
-              <tr>
+              <tr> 
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Date</th>
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Client / Project</th>
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Description</th>
@@ -291,7 +402,7 @@ function TimeTracking() {
                       <td className="px-4 py-3">
                         <div>
                           <div className="font-medium">{getClientName(entry.clientId)}</div>
-                          <div className="text-sm text-surface-500 dark:text-surface-400">
+                          <div className="text-sm text-surface-500 dark:text-surface-400"> 
                             {entry.projectId ? `Project #${entry.projectId}` : 'No Project'}
                           </div>
                         </div>

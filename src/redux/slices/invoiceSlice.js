@@ -1,5 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'react-toastify';
 
 // Generate an invoice number with a specific format: INV-YYYY-XXXX
 const generateInvoiceNumber = (invoices) => {
@@ -60,6 +61,7 @@ const initialState = {
   invoices: initialInvoices,
   currentInvoice: null,
   loading: false,
+  syncing: false,
   error: null,
 };
 
@@ -67,6 +69,22 @@ const invoiceSlice = createSlice({
   name: 'invoices',
   initialState,
   reducers: {
+    // Set all invoices (e.g., after fetching from API)
+    setInvoices: (state, action) => {
+      state.invoices = action.payload;
+      state.loading = false;
+    },
+    
+    // Loading states for API operations
+    setLoading: (state, action) => {
+      state.loading = action.payload;
+    },
+    apiRequestStarted: (state) => {
+      state.syncing = true;
+    },
+    apiRequestFinished: (state) => {
+      state.syncing = false;
+    },
     createInvoice: (state, action) => {
       const { clientId, timeEntryIds, items, issueDate, dueDate, notes, paymentTerms } = action.payload;
       
@@ -128,6 +146,6 @@ const invoiceSlice = createSlice({
   }
 });
 
-export const { createInvoice, updateInvoice, deleteInvoice, setCurrentInvoice, clearCurrentInvoice } = invoiceSlice.actions;
+export const { createInvoice, updateInvoice, deleteInvoice, setCurrentInvoice, clearCurrentInvoice, setInvoices, setLoading, apiRequestStarted, apiRequestFinished } = invoiceSlice.actions;
 
 export default invoiceSlice.reducer;

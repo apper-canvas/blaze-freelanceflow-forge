@@ -1,5 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'react-toastify';
 
 // Initial categories for time tracking
 const initialCategories = [
@@ -49,6 +50,7 @@ const initialState = {
   categories: initialCategories,
   activeTimer: null,
   loading: false,
+  syncing: false,
   error: null,
 };
 
@@ -56,6 +58,12 @@ const timeTrackingSlice = createSlice({
   name: 'timeTracking',
   initialState,
   reducers: {
+    // Set loading state
+    setLoading: (state, action) => {
+      state.loading = action.payload;
+    },
+    
+    // For data sync operations with backend
     // Time entries CRUD operations
     addTimeEntry: (state, action) => {
       const newEntry = {
@@ -76,6 +84,21 @@ const timeTrackingSlice = createSlice({
     deleteTimeEntry: (state, action) => {
       state.timeEntries = state.timeEntries.filter(entry => entry.id !== action.payload);
     },
+    
+    // Set all time entries (e.g., after fetching from API)
+    setTimeEntries: (state, action) => {
+      state.timeEntries = action.payload;
+      state.loading = false;
+    },
+    
+    // API operation states
+    apiRequestStarted: (state) => {
+      state.syncing = true;
+    },
+    apiRequestFinished: (state) => {
+      state.syncing = false;
+    },
+    
     // Timer operations
     startTimer: (state, action) => {
       state.activeTimer = {
@@ -127,6 +150,16 @@ const timeTrackingSlice = createSlice({
   },
 });
 
-export const { addTimeEntry, updateTimeEntry, deleteTimeEntry, startTimer, stopTimer, cancelTimer, addCategory } = timeTrackingSlice.actions;
+export const { 
+  addTimeEntry, 
+  updateTimeEntry, 
+  deleteTimeEntry, 
+  startTimer, 
+  stopTimer, 
+  cancelTimer, 
+  addCategory,
+  setTimeEntries,
+  setLoading
+} = timeTrackingSlice.actions;
 
 export default timeTrackingSlice.reducer;

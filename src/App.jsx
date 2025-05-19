@@ -1,24 +1,157 @@
-import { useState, useEffect } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { createContext, useEffect, useState } from 'react';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { ToastContainer, toast } from 'react-toastify';
+import { useDispatch, useSelector } from 'react-redux';
+import { setUser, clearUser } from './redux/slices/userSlice';
 import { ToastContainer } from 'react-toastify';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Menu, X, Sun, Moon } from 'lucide-react';
 
 // Pages
 import Home from './pages/Home';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import Callback from './pages/Callback';
+import ErrorPage from './pages/ErrorPage';
 import NotFound from './pages/NotFound';
 import TimeTracking from './pages/TimeTracking';
-import Invoices from './pages/Invoices';
+// Create auth context
+export const AuthContext = createContext(null);
 
-function App() {
+// Protected route component
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated } = useSelector((state) => state.user);
+  const currentPath = window.location.pathname + window.location.search;
+  
+  if (!isAuthenticated) {
+    return <Navigate to={`/login?redirect=${currentPath}`} />;
+  }
+  
+  return children;
+};
+
+import Invoices from './pages/Invoices';
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Initialize ApperUI once when the app loads
+  useEffect(() => {
+    try {
+      const { ApperClient, ApperUI } = window.ApperSDK;
+      const client = new ApperClient({
+        apperProjectId: import.meta.env.VITE_APPER_PROJECT_ID,
+        apperPublicKey: import.meta.env.VITE_APPER_PUBLIC_KEY
+      });
+
+      // Initialize but don't show login yet
+      ApperUI.setup(client, {
+        target: '#authentication',
+        clientId: import.meta.env.VITE_APPER_PROJECT_ID,
+        view: 'both',
+        onSuccess: function (user) {
+          setIsInitialized(true);
+          // CRITICAL: This exact currentPath logic must be preserved in all implementations
+          // DO NOT simplify or modify this pattern as it ensures proper redirection flow
+          let currentPath = window.location.pathname + window.location.search;
+          let redirectPath = new URLSearchParams(window.location.search).get('redirect');
+          const isAuthPage = currentPath.includes('/login') || currentPath.includes('/signup') || currentPath.includes(
+            '/callback') || currentPath.includes('/error');
+          if (user) {
+            // User is authenticated
+            if (redirectPath) {
+              navigate(redirectPath);
+            } else if (!isAuthPage) {
+              if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
+                navigate(currentPath);
+              } else {
+                navigate('/');
+              }
+            } else {
+              navigate('/');
+            }
+            // Store user information in Redux
+            dispatch(setUser(JSON.parse(JSON.stringify(user))));
+            toast.success(`Welcome, ${user.firstName || 'User'}!`);
+          } else {
+            // User is not authenticated
+            if (!isAuthPage) {
+              navigate(
+                currentPath.includes('/signup')
+                  ? `/signup?redirect=${currentPath}`
+                  : currentPath.includes('/login')
+                    ? `/login?redirect=${currentPath}`
+                    : '/login');
+            } else if (redirectPath) {
+              if (
+                ![
+                  'error',
+                  'signup',
+                  'login',
+                  'callback'
+                ].some((path) => currentPath.includes(path)))
+                navigate(`/login?redirect=${redirectPath}`);
+              else {
+                navigate(currentPath);
+              }
+            } else if (isAuthPage) {
+              navigate(currentPath);
+            } else {
+              navigate('/login');
+            }
+            dispatch(clearUser());
+          }
+        },
+        onError: function(error) {
+          console.error("Authentication failed:", error);
+          toast.error("Authentication failed. Please try again.");
+          setIsInitialized(true);
+        }
+      });
+    } catch (error) {
+      console.error("Error initializing authentication:", error);
+      setIsInitialized(true);
+    }
+  }, [dispatch, navigate]);
+
+  // Authentication methods to share via context
+  const authMethods = {
+    isInitialized,
+    logout: async () => {
+      try {
+        const { ApperUI } = window.ApperSDK;
+        await ApperUI.logout();
+        dispatch(clearUser());
+        navigate('/login');
+        toast.info("You have been logged out");
+      } catch (error) {
+        console.error("Logout failed:", error);
+        toast.error("Logout failed. Please try again.");
+      }
+    }
+  };
+
+  // Don't render routes until initialization is complete
+  if (!isInitialized) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-pulse text-lg font-medium">Initializing application...</div>
+    </div>;
+  }
+
+
+    <AuthContext.Provider value={authMethods}>
   const location = useLocation();
-  const [darkMode, setDarkMode] = useState(
-    localStorage.getItem('darkMode') === 'true' || 
-    window.matchMedia('(prefers-color-scheme: dark)').matches
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/callback" element={<Callback />} />
+        <Route path="/error" element={<ErrorPage />} />
+        <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+        <Route path="/time-tracking" element={<ProtectedRoute><TimeTracking /></ProtectedRoute>} />
+        <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
+    </AuthContext.Provider>
     if (darkMode) {
       document.documentElement.classList.add('dark');
     } else {

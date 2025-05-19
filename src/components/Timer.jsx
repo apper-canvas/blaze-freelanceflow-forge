@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { Play, Pause, StopCircle, X } from 'lucide-react';
 
 function Timer({ isRunning, startTime, onStart, onStop, onCancel }) {
@@ -16,6 +16,7 @@ function Timer({ isRunning, startTime, onStart, onStop, onCancel }) {
   const startTimer = () => {
     if (onStart) onStart();
   };
+  
 
   // Stop the timer
   const stopTimer = () => {

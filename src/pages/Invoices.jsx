@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { useState, useEffect, useContext } from 'react';
+import { useSelector, useDispatch } from 'react-redux'; 
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { v4 as uuidv4 } from 'uuid';
@@ -7,8 +7,9 @@ import {
   Plus, FileText, Download, Eye, Edit, Trash2, DollarSign, 
   CheckCircle, AlertCircle, Clock, Calendar 
 } from 'lucide-react';
+import { X } from 'lucide-react';
+import { AuthContext } from '../App';
 
-// Redux actions
 import { 
   createInvoice, 
   updateInvoice, 
@@ -17,6 +18,15 @@ import {
   clearCurrentInvoice
 } from '../redux/slices/invoiceSlice';
 import { updateTimeEntry } from '../redux/slices/timeTrackingSlice';
+import { format } from 'date-fns';
+
+// Services
+import { fetchInvoices, createInvoice as createInvoiceService, updateInvoice as updateInvoiceService, deleteInvoice as deleteInvoiceService } from '../services/invoiceService';
+import { createInvoiceItems } from '../services/invoiceItemService';
+import { 
+  fetchTimeEntries, 
+  updateTimeEntry as updateTimeEntryService 
+} from '../services/timeEntryService';
 
 // Mock client data - in a real app, this would come from an API
 const clients = [
@@ -27,8 +37,10 @@ const clients = [
 
 function Invoices() {
   const dispatch = useDispatch();
-  const { invoices, currentInvoice } = useSelector((state) => state.invoices);
-  const { timeEntries } = useSelector((state) => state.timeTracking);
+  const { user } = useSelector((state) => state.user);
+  const { invoices, currentInvoice, loading } = useSelector((state) => state.invoices);
+  const { timeEntries, loading: timeEntriesLoading } = useSelector((state) => state.timeTracking);
+  const { isAuthenticated } = useContext(AuthContext);
   
   // Local state
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
@@ -42,6 +54,33 @@ function Invoices() {
     paymentTerms: 'Net 15',
     tax: 0
   });
+  
+  // Fetch invoices when component mounts
+  useEffect(() => {
+    async function loadInvoices() {
+      try {
+        const data = await fetchInvoices();
+        
+        // Transform API data to match component's expected structure
+        const formattedInvoices = data.map(invoice => ({
+          id: invoice.Id,
+          invoiceNumber: invoice.invoiceNumber,
+          client: invoice.client,
+          issueDate: invoice.issueDate,
+          dueDate: invoice.dueDate,
+          status: invoice.status || 'draft',
+          subtotal: parseFloat(invoice.subtotal) || 0,
+          tax: parseFloat(invoice.tax) || 0,
+          total: parseFloat(invoice.total) || 0,
+          notes: invoice.notes,
+          paymentTerms: invoice.paymentTerms
+        }));
+      } catch (error) {
+        console.error("Error loading invoices:", error);
+        toast.error("Failed to load invoices. Please try again.");
+      }
+    }
+  }, [user?.Id]);
   
   // Get client by ID
   const getClient = (clientId) => {
@@ -225,10 +264,15 @@ function Invoices() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }} 
+      className="container mx-auto px-4 py-8"
+    >
+      <motion.div
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
       className="container mx-auto px-4 py-8"
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
@@ -242,7 +286,12 @@ function Invoices() {
       </div>
       
       {/* Invoice List */}
-      <div className="card mb-8">
+      <div className="card mb-8 relative">
+        {loading && (
+          <div className="absolute inset-0 bg-white/70 dark:bg-surface-800/70 flex items-center justify-center z-10">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        )}
         <h3 className="text-lg font-semibold mb-4">Invoice List</h3>
         
         <div className="overflow-x-auto">
@@ -622,6 +671,7 @@ function Invoices() {
             </div>
           </div>
         </div>
+      </motion.div>
       )}
     </motion.div>
   );

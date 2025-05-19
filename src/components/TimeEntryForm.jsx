@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
+import { toast } from 'react-toastify'; 
 import { X } from 'lucide-react';
 
 function TimeEntryForm({ 
@@ -10,8 +10,9 @@ function TimeEntryForm({
   onCancel 
 }) {
   // State for form fields
+  // Initialize with defaults that match the database fields
   const [formData, setFormData] = useState({
-    clientId: '',
+    client: '',
     projectId: '',
     description: '',
     categoryId: '',
@@ -29,15 +30,17 @@ function TimeEntryForm({
   // Handle input changes
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
+    // Special handling for client field to match database schema
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? checked : value
     });
 
     // If client changes, update available projects
-    if (name === 'clientId' && value) {
+    if (name === 'client' && value) {
       // Mock projects - in a real app, you would fetch these from the server
-      const clientProjects = [
+     const clientProjects = [
         { id: 101, clientId: 1, name: 'Website Redesign' },
         { id: 102, clientId: 1, name: 'Mobile App Development' },
         { id: 201, clientId: 2, name: 'Branding Campaign' },
@@ -70,7 +73,7 @@ function TimeEntryForm({
   useEffect(() => {
     if (entry) {
       setFormData({
-        clientId: entry.clientId.toString(),
+        client: entry.client || '',
         projectId: entry.projectId.toString(),
         description: entry.description || '',
         categoryId: entry.categoryId || '',
@@ -82,15 +85,15 @@ function TimeEntryForm({
         billable: entry.billable !== undefined ? entry.billable : true
       });
       
-      // Set projects for selected client
-      if (entry.clientId) {
+      // Set projects for selected client 
+      if (entry.client) {
         const clientProjects = [
           { id: 101, clientId: 1, name: 'Website Redesign' },
           { id: 102, clientId: 1, name: 'Mobile App Development' },
           { id: 201, clientId: 2, name: 'Branding Campaign' },
           { id: 202, clientId: 2, name: 'Marketing Strategy' },
           { id: 301, clientId: 3, name: 'Infrastructure Upgrade' }
-        ].filter(project => project.clientId === entry.clientId);
+        ].filter(project => project.clientId === parseInt(entry.client));
         
         setAvailableProjects(clientProjects);
       }
@@ -102,7 +105,7 @@ function TimeEntryForm({
     e.preventDefault();
     
     // Basic validation
-    if (!formData.clientId || !formData.description || !formData.date || 
+    if (!formData.client || !formData.description || !formData.date || 
         !formData.startTime || !formData.endTime || formData.duration <= 0) {
       toast.error('Please fill all required fields');
       return;
@@ -111,7 +114,8 @@ function TimeEntryForm({
     // Convert clientId and projectId to numbers
     const submissionData = {
       ...formData,
-      clientId: parseInt(formData.clientId),
+      // Keep clientId as string to match database field
+      //client: formData.client, 
       projectId: formData.projectId ? parseInt(formData.projectId) : null,
       duration: parseFloat(formData.duration) || 0,
       rate: parseFloat(formData.rate)
@@ -132,12 +136,12 @@ function TimeEntryForm({
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="input-group">
-          <label className="input-label">Client</label>
-          <select name="clientId" value={formData.clientId} onChange={handleChange} className="input-field" required>
+          <label className="input-label">Client</label> 
+          <select name="client" value={formData.client} onChange={handleChange} className="input-field" required>
             <option value="">Select a client</option>
-            {clients.map(client => (
-              <option key={client.id} value={client.id}>{client.name}</option>
-            ))}
+            <option value="Acme Corporation">Acme Corporation</option>
+            <option value="Globex Industries">Globex Industries</option>
+            <option value="Stark Enterprises">Stark Enterprises</option>
           </select>
         </div>
         
@@ -167,9 +171,13 @@ function TimeEntryForm({
         <div className="input-group">
           <label className="input-label">Category</label>
           <select name="categoryId" value={formData.categoryId} onChange={handleChange} className="input-field" required>
-            <option value="">Select a category</option>
-            {categories.map(category => (
-              <option key={category.id} value={category.id}>{category.name}</option>
+            <option value="">Select a category</option> 
+            {/* Updated to match database picklist values */}
+            <option value="Development">Development</option>
+            <option value="Design">Design</option>
+            <option value="Meeting">Meeting</option>
+            <option value="Research">Research</option>
+            <option value="Administrative">Administrative</option>
             ))}
           </select>
         </div>
