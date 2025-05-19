@@ -59,6 +59,7 @@ function Invoices() {
   useEffect(() => {
     async function loadInvoices() {
       try {
+        // Fetch invoices from the service
         const data = await fetchInvoices();
         
         // Transform API data to match component's expected structure
@@ -75,9 +76,11 @@ function Invoices() {
           notes: invoice.notes,
           paymentTerms: invoice.paymentTerms
         }));
+        
+        // Set the invoices in Redux store
+        dispatch(setInvoices(formattedInvoices));
       } catch (error) {
         console.error("Error loading invoices:", error);
-        toast.error("Failed to load invoices. Please try again.");
       }
     }
   }, [user?.Id]);
@@ -273,7 +276,7 @@ function Invoices() {
       <motion.div
       initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
-      className="container mx-auto px-4 py-8"
+      className="container mx-auto px-4 py-8 mb-8"
     >
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
         <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-0">Invoices</h1>
@@ -670,11 +673,10 @@ function Invoices() {
               </button>
             </div>
           </div>
-        </div>
+      )}
       </motion.div>
       )}
-    </motion.div>
+}
   );
 }
-
 export default Invoices;
