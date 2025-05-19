@@ -53,7 +53,7 @@ function Timer({ isRunning, startTime, onStart, onStop, onCancel }) {
       }
       setElapsedTime(0);
     }
-  }, [isRunning, startTime]);
+  }, [isRunning, startTime, timer]);
 
   return (
     <div className="flex flex-col bg-surface-100 dark:bg-surface-700 rounded-lg p-4">

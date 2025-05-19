@@ -112,8 +112,8 @@ function TimeEntryForm({
     const submissionData = {
       ...formData,
       clientId: parseInt(formData.clientId),
-      projectId: parseInt(formData.projectId),
-      duration: parseFloat(formData.duration),
+      projectId: formData.projectId ? parseInt(formData.projectId) : null,
+      duration: parseFloat(formData.duration) || 0,
       rate: parseFloat(formData.rate)
     };
     
@@ -143,7 +143,7 @@ function TimeEntryForm({
         
         <div className="input-group">
           <label className="input-label">Project</label>
-          <select name="projectId" value={formData.projectId} onChange={handleChange} className="input-field" required>
+          <select name="projectId" value={formData.projectId} onChange={handleChange} className="input-field">
             <option value="">Select a project</option>
             {availableProjects.map(project => (
               <option key={project.id} value={project.id}>{project.name}</option>

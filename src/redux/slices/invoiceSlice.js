@@ -78,7 +78,7 @@ const invoiceSlice = createSlice({
       const newInvoice = {
         id: uuidv4(),
         invoiceNumber: generateInvoiceNumber(state.invoices),
-        clientId,
+        clientId: clientId || 0,
         issueDate: issueDate || new Date().toISOString().split('T')[0],
         dueDate: dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         status: 'draft',

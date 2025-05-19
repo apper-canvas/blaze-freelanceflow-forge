@@ -165,6 +165,7 @@ function Invoices() {
     
     // Create invoice
     const newInvoice = {
+      id: uuidv4(),
       clientId: parseInt(selectedClient),
       timeEntryIds: selectedTimeEntries,
       items,
@@ -179,7 +180,7 @@ function Invoices() {
     // Mark time entries as invoiced
     for (const entryId of selectedTimeEntries) {
       dispatch(updateTimeEntry({ 
-        id: entryId, 
+        id: entryId,
         invoiced: true,
         invoiceId: newInvoice.id
       }));

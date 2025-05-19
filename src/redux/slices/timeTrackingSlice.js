@@ -87,7 +87,7 @@ const timeTrackingSlice = createSlice({
       };
     },
     stopTimer: (state) => {
-      if (state.activeTimer) {
+      if (state.activeTimer && state.activeTimer.startTime) {
         const endTime = new Date().toISOString();
         const startDate = new Date(state.activeTimer.startTime);
         const endDate = new Date(endTime);
@@ -95,8 +95,8 @@ const timeTrackingSlice = createSlice({
         
         // Format the date and times for display and storage
         const date = startDate.toISOString().split('T')[0];
-        const formattedStartTime = startDate.toTimeString().substring(0, 5);
-        const formattedEndTime = endDate.toTimeString().substring(0, 5);
+        const formattedStartTime = startDate.getHours().toString().padStart(2, '0') + ':' + startDate.getMinutes().toString().padStart(2, '0');
+        const formattedEndTime = endDate.getHours().toString().padStart(2, '0') + ':' + endDate.getMinutes().toString().padStart(2, '0');
         
         // Create time entry from timer
         state.timeEntries.push({
