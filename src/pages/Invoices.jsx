@@ -13,6 +13,7 @@ import { AuthContext } from '../App';
 import { 
   createInvoice, 
   updateInvoice, 
+  setInvoices,
   deleteInvoice,
   setCurrentInvoice,
   clearCurrentInvoice
@@ -39,7 +40,7 @@ function Invoices() {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.user);
   const { invoices, currentInvoice, loading } = useSelector((state) => state.invoices);
-  const { timeEntries, loading: timeEntriesLoading } = useSelector((state) => state.timeTracking);
+  const { timeEntries } = useSelector((state) => state.timeTracking);
   const { isAuthenticated } = useContext(AuthContext);
   
   // Local state
@@ -83,6 +84,7 @@ function Invoices() {
         console.error("Error loading invoices:", error);
       }
     }
+    loadInvoices();
   }, [user?.Id]);
   
   // Get client by ID
