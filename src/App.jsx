@@ -10,6 +10,7 @@ import { Menu, X, Sun, Moon } from 'lucide-react';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import Invoices from './pages/Invoices';
 import Callback from './pages/Callback';
 import ErrorPage from './pages/ErrorPage';
 import NotFound from './pages/NotFound';
@@ -30,7 +31,6 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
-  import Invoices from './pages/Invoices';
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const location = useLocation();
