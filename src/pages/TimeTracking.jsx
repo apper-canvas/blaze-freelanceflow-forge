@@ -148,60 +148,58 @@ function TimeTracking() {
   const handleOpenForm = (entry = null) => {
     setCurrentEntry(entry);
     setShowForm(true);
+  };
 
-  
+  // Handle form submission
+  const handleSubmitForm = async (formData) => {
     // Show loading state
     dispatch(setLoading(true));
     
-    async function saveTimeEntry() {
-      try {
-        if (currentEntry) {
-          // Update existing entry
-          const updatedEntry = await updateTimeEntryService(currentEntry.id, {
-            Name: `Time entry for ${formData.client}`,
-            ...formData,
-            // Ensure we're using the right field names for the database
-            client: formData.client,
-            category: formData.categoryId
-          });
-          
-          dispatch(updateTimeEntry({
-            id: currentEntry.id,
-            ...formData
-          }));
-          toast.success('Time entry updated!');
-        } else {
-          // Add new entry
-          const newEntry = await createTimeEntry({
-            Name: `Time entry for ${formData.client}`,
-            ...formData,
-            // Ensure we're using the right field names for the database
-            client: formData.client,
-            category: formData.categoryId
-          });
-          
-          dispatch(addTimeEntry({
-            id: newEntry.Id,
-            ...formData
-          }));
-          toast.success('Time entry added!');
-        }
-      } catch (error) {
-        console.error('Error saving time entry:', error);
-        toast.error('Failed to save time entry. Please try again.');
-      } finally {
-        dispatch(setLoading(false));
-        handleCloseForm();
+    try {
+      if (currentEntry) {
+        // Update existing entry
+        const updatedEntry = await updateTimeEntryService(currentEntry.id, {
+          Name: `Time entry for ${formData.client}`,
+          ...formData,
+          // Ensure we're using the right field names for the database
+          client: formData.client,
+          category: formData.categoryId
+        });
+        
+        dispatch(updateTimeEntry({
+          id: currentEntry.id,
+          ...formData
+        }));
+        toast.success('Time entry updated!');
+      } else {
+        // Add new entry
+        const newEntry = await createTimeEntry({
+          Name: `Time entry for ${formData.client}`,
+          ...formData,
+          // Ensure we're using the right field names for the database
+          client: formData.client,
+          category: formData.categoryId
+        });
+        
+        dispatch(addTimeEntry({
+          id: newEntry.Id,
+          ...formData
+        }));
+        toast.success('Time entry added!');
       }
-      dispatch(updateTimeEntry({ id: currentEntry.id, ...formData }));
-    
-    saveTimeEntry();
-    } else {
-
-    if (confirm('Are you sure you want to delete this time entry?')) {
-      dispatch(deleteTimeEntry(id));
-      toast.success('Time entry deleted!');
+    } catch (error) {
+      console.error('Error saving time entry:', error);
+      toast.error('Failed to save time entry. Please try again.');
+    } finally {
+      dispatch(setLoading(false));
+      handleCloseForm();
     }
+  };
+
+  // Handle close form
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setCurrentEntry(null);
   };
   
     
@@ -401,7 +399,7 @@ function TimeTracking() {
                       </td>
                       <td className="px-4 py-3">
                         <div>
-                          <div className="font-medium">{getClientName(entry.clientId)}</div>
+                          <div className="font-medium">{getClientName(entry.client)}</div>
                           <div className="text-sm text-surface-500 dark:text-surface-400"> 
                             {entry.projectId ? `Project #${entry.projectId}` : 'No Project'}
                           </div>

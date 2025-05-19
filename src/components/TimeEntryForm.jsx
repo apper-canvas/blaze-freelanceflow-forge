@@ -178,7 +178,6 @@ function TimeEntryForm({
             <option value="Meeting">Meeting</option>
             <option value="Research">Research</option>
             <option value="Administrative">Administrative</option>
-            ))}
           </select>
         </div>
         
