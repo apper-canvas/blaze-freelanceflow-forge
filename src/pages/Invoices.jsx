@@ -676,7 +676,5 @@ function Invoices() {
       )}
       </motion.div>
       )}
-}
-  );
-}
+    </motion.div>
 export default Invoices;
