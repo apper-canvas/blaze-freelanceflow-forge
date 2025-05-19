@@ -1,16 +1,16 @@
 import { useState, useEffect, useContext } from 'react';
-import { useSelector, useDispatch } from 'react-redux'; 
+import { useSelector, useDispatch } from 'react-redux';
 import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { v4 as uuidv4 } from 'uuid';
-import { 
+import {
   Plus, FileText, Download, Eye, Edit, Trash2, DollarSign, 
   CheckCircle, AlertCircle, Clock, Calendar 
 } from 'lucide-react';
 import { X } from 'lucide-react';
 import { AuthContext } from '../App';
 
-import { 
+import {
   createInvoice, 
   updateInvoice, 
   setInvoices,
@@ -24,49 +24,114 @@ import { format } from 'date-fns';
 // Services
 import { fetchInvoices, createInvoice as createInvoiceService, updateInvoice as updateInvoiceService, deleteInvoice as deleteInvoiceService } from '../services/invoiceService';
 import { createInvoiceItems } from '../services/invoiceItemService';
-import { 
+import {
   fetchTimeEntries, 
   updateTimeEntry as updateTimeEntryService 
 } from '../services/timeEntryService';
+import { fetchClients } from '../services/clientService';
 
-// Mock client data - in a real app, this would come from an API
-const clients = [
-  { id: 1, name: 'Acme Corporation', contactName: 'John Smith', email: 'john@acme.com', phone: '(555) 123-4567', status: 'active', address: '123 Main St, Suite 100, San Francisco, CA 94105' },
-  { id: 2, name: 'Globex Industries', contactName: 'Jane Brown', email: 'jane@globex.com', phone: '(555) 987-6543', status: 'active', address: '456 Market St, Chicago, IL 60601' },
-  { id: 3, name: 'Stark Enterprises', contactName: 'Tony Rogers', email: 'tony@stark.com', phone: '(555) 111-2222', status: 'inactive', address: '789 Broadway, New York, NY 10003' },
-];
+// Helper functions
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(amount);
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  
+  try {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  } catch (error) {
+    console.error("Date formatting error:", error);
+    return dateString;
+  }
+};
+
+// Initial form data
+const initialInvoiceFormData = {
+  issueDate: new Date().toISOString().split('T')[0],
+  dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  notes: 'Thank you for your business!',
+  paymentTerms: 'Net 15',
+  tax: 0,
+  status: 'draft'
+};
 
 function Invoices() {
   const dispatch = useDispatch();
   const { user } = useSelector((state) => state.user);
   const { invoices, currentInvoice, loading } = useSelector((state) => state.invoices);
   const { timeEntries } = useSelector((state) => state.timeTracking);
-  const { isAuthenticated } = useContext(AuthContext);
+  const { isAuthenticated, logout } = useContext(AuthContext);
   
   // Local state
+  const [clients, setClients] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
   const [selectedClient, setSelectedClient] = useState('');
   const [selectedTimeEntries, setSelectedTimeEntries] = useState([]);
-  const [invoiceFormData, setInvoiceFormData] = useState({
-    issueDate: new Date().toISOString().split('T')[0],
-    dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    notes: 'Thank you for your business!',
-    paymentTerms: 'Net 15',
-    tax: 0
-  });
+  const [availableTimeEntries, setAvailableTimeEntries] = useState([]);
+  const [invoiceFormData, setInvoiceFormData] = useState(initialInvoiceFormData);
+  const [formErrors, setFormErrors] = useState({});
+  
+  // Fetch clients for dropdown
+  useEffect(() => {
+    async function loadClients() {
+      try {
+        const clientData = await fetchClients();
+        setClients(clientData.map(client => ({
+          id: client.Id,
+          name: client.Name,
+          contactName: client.contactName || 'Contact Not Available',
+          email: client.email || 'Email Not Available',
+          phone: client.phone || 'Phone Not Available',
+          status: client.status || 'active',
+          address: client.address || 'Address Not Available'
+        })));
+      } catch (error) {
+        console.error("Error loading clients:", error);
+        toast.error("Failed to load client data. Please refresh the page.");
+        
+        // Fallback for development: if client service fails, use sample data
+        if (import.meta.env.DEV) {
+          setClients([
+            { id: 1, name: 'Acme Corporation', contactName: 'John Smith', email: 'john@acme.com', phone: '(555) 123-4567', status: 'active', address: '123 Main St, Suite 100, San Francisco, CA 94105' },
+            { id: 2, name: 'Globex Industries', contactName: 'Jane Brown', email: 'jane@globex.com', phone: '(555) 987-6543', status: 'active', address: '456 Market St, Chicago, IL 60601' },
+            { id: 3, name: 'Stark Enterprises', contactName: 'Tony Rogers', email: 'tony@stark.com', phone: '(555) 111-2222', status: 'inactive', address: '789 Broadway, New York, NY 10003' },
+          ]);
+        }
+      }
+    }
+    loadClients();
+  }, [user?.Id]);
   
   // Fetch invoices when component mounts
   useEffect(() => {
     async function loadInvoices() {
       try {
-        // Fetch invoices from the service
-        const data = await fetchInvoices();
+        setIsLoading(true);
+        dispatch(setLoading(true));
+        
+        // Fetch time entries first to make sure we have current data
+        const timeEntryData = await fetchTimeEntries();
+        
+        // Now fetch invoices
+        const invoiceData = await fetchInvoices();
         
         // Transform API data to match component's expected structure
-        const formattedInvoices = data.map(invoice => ({
+        const formattedInvoices = invoiceData.map(invoice => ({
           id: invoice.Id,
-          invoiceNumber: invoice.invoiceNumber,
+          invoiceNumber: invoice.invoiceNumber || `INV-${new Date().getFullYear()}-0001`,
+          clientId: clients.find(c => c.name === invoice.client)?.id || null,
           client: invoice.client,
           issueDate: invoice.issueDate,
           dueDate: invoice.dueDate,
@@ -75,62 +140,58 @@ function Invoices() {
           tax: parseFloat(invoice.tax) || 0,
           total: parseFloat(invoice.total) || 0,
           notes: invoice.notes,
-          paymentTerms: invoice.paymentTerms
+          paymentTerms: invoice.paymentTerms,
+          // For newly fetched invoices, we might not have items yet
+          items: invoice.items || []
         }));
         
         // Set the invoices in Redux store
         dispatch(setInvoices(formattedInvoices));
       } catch (error) {
         console.error("Error loading invoices:", error);
+        toast.error("Failed to load invoices. Please refresh the page.");
+      } finally {
+        setIsLoading(false);
+        dispatch(setLoading(false));
       }
     }
-    loadInvoices();
-  }, [user?.Id]);
-  
-  // Get client by ID
-  const getClient = (clientId) => {
-    return clients.find(c => c.id === clientId) || null;
-  };
-  
-  // Get billable, uninvoiced time entries for a client
-  const getClientTimeEntries = (clientId) => {
-    return timeEntries.filter(entry => 
-      entry.clientId === parseInt(clientId) && 
-      entry.billable && 
-      !entry.invoiced
-    );
-  };
-  
-  // Format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
-  
-  // Format date
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
+    
+    if (clients.length > 0) {
+      loadInvoices();
+    }
+  }, [dispatch, clients, user?.Id]);
   
   // Handle client selection change
   const handleClientChange = (e) => {
     const clientId = e.target.value;
     setSelectedClient(clientId);
     setSelectedTimeEntries([]);
+    setFormErrors({});
     
     if (clientId) {
       // Get available time entries for this client
-      const clientEntries = getClientTimeEntries(clientId);
+      const clientEntries = getClientTimeEntries(parseInt(clientId));
+      setAvailableTimeEntries(clientEntries);
       if (clientEntries.length === 0) {
         toast.info('No billable, uninvoiced time entries found for this client');
       }
     }
+  };
+
+  // Get client by ID
+  const getClient = (clientId) => {
+    return clients.find(c => c.id === clientId || c.id === parseInt(clientId)) || null;
+  };
+  
+  // Get billable, uninvoiced time entries for a client
+  const getClientTimeEntries = (clientId) => {
+    if (!clientId) return [];
+    
+    return timeEntries.filter(entry => 
+      (entry.clientId === clientId || entry.client === getClient(clientId)?.name) && 
+      entry.billable && 
+      !entry.invoiced
+    );
   };
   
   // Handle time entry selection
@@ -156,13 +217,14 @@ function Invoices() {
         allEntryIds.every(id => selectedTimeEntries.includes(id))) {
       setSelectedTimeEntries([]);
     } else {
+    setFormErrors({});
       setSelectedTimeEntries(allEntryIds);
     }
   };
   
   // Generate invoice from selected time entries
   const handleGenerateInvoice = () => {
-    if (!selectedClient || selectedTimeEntries.length === 0) {
+    const clientEntries = availableTimeEntries;
       toast.error('Please select a client and at least one time entry');
       return;
     }
@@ -172,10 +234,11 @@ function Invoices() {
       selectedTimeEntries.includes(entry.id)
     );
     
+    setFormErrors({});
     // Group entries by project and description
     const entriesByProject = {};
     for (const entry of selectedEntries) {
-      const key = `${entry.projectId}-${entry.description}`;
+  const handleGenerateInvoice = async () => {
       if (!entriesByProject[key]) {
         entriesByProject[key] = {
           entries: [],
@@ -214,60 +277,151 @@ function Invoices() {
       timeEntryIds: selectedTimeEntries,
       items,
       ...invoiceFormData,
-      tax: taxAmount,
-      subtotal,
-      total
-    };
-    
-    dispatch(createInvoice(newInvoice));
-    
-    // Mark time entries as invoiced
-    for (const entryId of selectedTimeEntries) {
-      dispatch(updateTimeEntry({ 
-        id: entryId,
-        invoiced: true,
-        invoiceId: newInvoice.id
-      }));
-    }
-    
-    toast.success('Invoice generated successfully!');
-    setShowInvoiceForm(false);
-    setSelectedClient('');
-    setSelectedTimeEntries([]);
-  };
-  
-  // Handle delete invoice
-  const handleDeleteInvoice = (id) => {
-    if (confirm('Are you sure you want to delete this invoice?')) {
-      // Find time entries associated with this invoice
-      const invoiceTimeEntries = timeEntries.filter(entry => entry.invoiceId === id);
+
+    try {
+      setIsSubmitting(true);
+      // Prepare invoice data for the API
+      const client = getClient(parseInt(selectedClient));
+      const invoiceData = {
+        Name: `Invoice for ${client?.name || 'Client'}`,
+        client: client?.name,
+        issueDate: invoiceFormData.issueDate,
+        dueDate: invoiceFormData.dueDate,
+        status: 'draft',
+        subtotal: subtotal.toFixed(2),
+        tax: taxAmount.toFixed(2),
+        total: total.toFixed(2),
+        notes: invoiceFormData.notes,
+        paymentTerms: invoiceFormData.paymentTerms
+      };
       
-      // Update time entries to mark them as not invoiced
-      for (const entry of invoiceTimeEntries) {
-        dispatch(updateTimeEntry({
-          id: entry.id,
-          invoiced: false,
-          invoiceId: null
+      // Create invoice in the backend
+      const createdInvoice = await createInvoiceService(invoiceData);
+      
+      // Prepare invoice items
+      const invoiceItemsData = items.map(item => ({
+        Name: item.description,
+        invoice: createdInvoice.Id,
+        description: item.description,
+        quantity: item.quantity.toString(),
+        rate: item.rate.toString(),
+        amount: item.amount.toString()
+      }));
+      
+      // Create invoice items
+      if (invoiceItemsData.length > 0) {
+        await createInvoiceItems(invoiceItemsData);
+      }
+      
+      // Mark time entries as invoiced
+      for (const entryId of selectedTimeEntries) {
+        await updateTimeEntryService(entryId, {
+          invoiced: true,
+          invoiceId: createdInvoice.Id
+        });
+        
+        // Update in Redux state as well
+        dispatch(updateTimeEntry({ 
+          id: entryId,
+          invoiced: true,
+          invoiceId: createdInvoice.Id
         }));
       }
       
-      dispatch(deleteInvoice(id));
-      toast.success('Invoice deleted successfully!');
-    }
+      // Create the full invoice object for Redux
+      const newInvoice = {
+        id: createdInvoice.Id,
+        invoiceNumber: createdInvoice.invoiceNumber || `INV-${new Date().getFullYear()}-0001`,
+        clientId: parseInt(selectedClient),
+        client: client?.name,
+        timeEntryIds: selectedTimeEntries,
+        items,
+        ...invoiceFormData,
+        tax: taxAmount,
+        subtotal,
+        total,
+        status: 'draft'
+      };
+      
+      // Update Redux state
+      dispatch(createInvoice(newInvoice));
+      
+      toast.success('Invoice generated successfully!');
+      resetForm();
+    } catch (error) {
+      console.error("Error generating invoice:", error);
+      toast.error("Failed to generate invoice. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+  // Handle delete invoice
   };
   
-  // Handle preview invoice
+  // Reset form to initial state
+  const resetForm = () => {
+      // Find time entries associated with this invoice
+      const invoiceTimeEntries = timeEntries.filter(entry => entry.invoiceId === id);
+      
+    setInvoiceFormData(initialInvoiceFormData);
+    setFormErrors({});
+      // Update time entries to mark them as not invoiced
+      for (const entry of invoiceTimeEntries) {
+        dispatch(updateTimeEntry({
+  const handleDeleteInvoice = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this invoice?')) {
+      return;
+    }
+    
+    try {
+      setIsDeleting(true);
+      
+      // Delete invoice from the backend
+      await deleteInvoiceService(id);
+      
+      // Find time entries associated with this invoice
+      const invoiceTimeEntries = timeEntries.filter(entry => 
+        entry.invoiceId === id || entry.invoiceId === parseInt(id)
+      );
+      
+      // Update time entries in the backend and Redux
+      for (const entry of invoiceTimeEntries) {
+        try {
+          // Update in the backend
+          await updateTimeEntryService(entry.id, {
+            invoiced: false,
+            invoiceId: null
+          });
+          
+          // Update in Redux
+          dispatch(updateTimeEntry({
+            id: entry.id,
+            invoiced: false,
+            invoiceId: null
+          }));
+        } catch (entryError) {
+          console.error(`Error updating time entry ${entry.id}:`, entryError);
+        }
   const handlePreviewInvoice = (id) => {
     dispatch(setCurrentInvoice(id));
+      // Update Redux state
     setShowInvoicePreview(true);
   };
+    } catch (error) {
+      console.error(`Error deleting invoice ${id}:`, error);
+      toast.error("Failed to delete invoice. Please try again.");
+    } finally {
+      setIsDeleting(false);
   
   // Close invoice preview
   const handleClosePreview = () => {
     setShowInvoicePreview(false);
     dispatch(clearCurrentInvoice());
-  };
-
+    try {
+      dispatch(setCurrentInvoice(id));
+      setShowInvoicePreview(true);
+    } catch (error) {
+      console.error("Error previewing invoice:", error);
+      toast.error("Failed to preview invoice. Please try again.");
+    }
   return (
     <motion.div 
       initial={{ opacity: 0 }} 
@@ -275,19 +429,25 @@ function Invoices() {
       exit={{ opacity: 0 }} 
       className="container mx-auto px-4 py-8"
     >
-      <motion.div
+  
+  // Validate form before submission
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!selectedClient) {
+      errors.client = "Please select a client";
+    }
+    
+    if (selectedTimeEntries.length === 0) {
+      errors.timeEntries = "Please select at least one time entry";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+  
       initial={{ opacity: 1 }}
-      animate={{ opacity: 1 }}
-      className="container mx-auto px-4 py-8 mb-8"
-    >
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-0">Invoices</h1>
-        <button 
-          onClick={() => setShowInvoiceForm(true)}
-          className="btn-primary"
-        >
-          <Plus className="w-4 h-4 mr-2" /> Generate Invoice
-        </button>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="container mx-auto px-4 py-8">
       </div>
       
       {/* Invoice List */}
@@ -305,9 +465,9 @@ function Invoices() {
               <tr>
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Invoice #</th>
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Client</th>
-                <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Issue Date</th>
+
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Due Date</th>
-                <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Amount</th>
+      <div className="card mb-8 relative overflow-hidden">
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Status</th>
                 <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium">Actions</th>
               </tr>
@@ -322,7 +482,7 @@ function Invoices() {
                       <td className="px-4 py-3">{client ? client.name : 'Unknown Client'}</td>
                       <td className="px-4 py-3">{formatDate(invoice.issueDate)}</td>
                       <td className="px-4 py-3">{formatDate(invoice.dueDate)}</td>
-                      <td className="px-4 py-3 font-medium">{formatCurrency(invoice.total)}</td>
+                <th className="px-4 py-3 text-surface-600 dark:text-surface-300 font-medium hidden md:table-cell">Issue Date</th>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                           ${
@@ -330,49 +490,54 @@ function Invoices() {
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                               : invoice.status === 'overdue'
                               ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+              {isLoading ? (
+                <tr>
+                  <td colSpan="7" className="px-4 py-8 text-center">
+                    <div className="flex justify-center items-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-primary mr-3"></div>
+                      Loading invoices...
+                    </div>
+                  </td>
+                </tr>
+              ) : invoices.length > 0 ? (
                           }`}
-                        >
+                  const client = getClient(invoice.clientId) || { name: invoice.client || 'Unknown Client' };
                           {invoice.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex space-x-2">
+                      <td className="px-4 py-3">{client.name}</td>
+                      <td className="px-4 py-3 hidden md:table-cell">{formatDate(invoice.issueDate)}</td>
                           <button 
                             onClick={() => handlePreviewInvoice(invoice.id)}
                             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                             title="Preview Invoice"
+                          ${invoice.status === 'paid'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                            : invoice.status === 'overdue'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                          }`}
                           >
-                            <Eye size={16} />
-                          </button>
-                          <button 
-                            onClick={() => {/* Download invoice - would integrate with PDF generation */}}
-                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300"
-                            title="Download Invoice"
-                          >
-                            <Download size={16} />
+                          {invoice.status || 'draft'}
                           </button>
                           <button 
                             onClick={() => handleDeleteInvoice(invoice.id)}
                             className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                            title="Delete Invoice"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                          <button onClick={() => handlePreviewInvoice(invoice.id)} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" title="Preview Invoice">
                       </td>
                     </tr>
-                  );
-                })
-              ) : (
-                <tr>
+                          <button onClick={() => toast.info("PDF generation would be implemented here")} 
+                            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300" 
+                            title="Download Invoice" 
                   <td colSpan="7" className="px-4 py-6 text-center text-surface-500 dark:text-surface-400">
                     No invoices found. Generate a new invoice using your tracked time.
                   </td>
                 </tr>
               )}
             </tbody>
-          </table>
+                            disabled={isDeleting}
+                            aria-busy={isDeleting}
+                            >
         </div>
       </div>
       
@@ -382,9 +547,11 @@ function Invoices() {
           <div className="w-full max-w-4xl bg-white dark:bg-surface-800 rounded-xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-semibold">Generate New Invoice</h3>
-              <button 
-                onClick={() => setShowInvoiceForm(false)}
-                className="text-surface-500 hover:text-surface-700"
+                  <td colSpan="7" className="px-4 py-10 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <FileText size={48} className="text-surface-400 mb-3" />
+                      <p className="text-surface-500 dark:text-surface-400">No invoices found. Generate a new invoice using your tracked time.</p>
+                    </div>                  </td>
               >
                 <X size={20} />
               </button>
@@ -394,7 +561,7 @@ function Invoices() {
               <div className="input-group">
                 <label className="input-label">Client</label>
                 <select 
-                  value={selectedClient} 
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4 z-50 overflow-y-auto">
                   onChange={handleClientChange}
                   className="input-field"
                   required
@@ -407,7 +574,7 @@ function Invoices() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div className="input-group">
+              <div className={`input-group ${formErrors.client ? 'mb-1' : ''}`}>
                   <label className="input-label">Issue Date</label>
                   <input 
                     type="date" 
@@ -421,6 +588,9 @@ function Invoices() {
                   <label className="input-label">Due Date</label>
                   <input 
                     type="date" 
+              {formErrors.client && (
+                <p className="text-red-600 text-sm mt-1">{formErrors.client}</p>
+              )}
                     value={invoiceFormData.dueDate}
                     onChange={(e) => setInvoiceFormData({...invoiceFormData, dueDate: e.target.value})}
                     className="input-field"
@@ -462,19 +632,21 @@ function Invoices() {
                 ></textarea>
               </div>
             </div>
-            
+
             {selectedClient && (
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
+                <div className={`flex items-center justify-between mb-3 ${formErrors.timeEntries ? 'mb-1' : ''}`}>
                   <h4 className="font-semibold">Select Time Entries</h4>
                   <button 
+                    type="button"
                     onClick={handleSelectAllEntries}
                     className="text-sm text-primary hover:text-primary-dark"
+                    disabled={availableTimeEntries.length === 0}
                   >
-                    {getClientTimeEntries(selectedClient).length === selectedTimeEntries.length && 
-                     getClientTimeEntries(selectedClient).length > 0 
-                      ? 'Deselect All' 
-                      : 'Select All'}
+                    {availableTimeEntries.length === selectedTimeEntries.length && 
+                     availableTimeEntries.length > 0 
+                     ? 'Deselect All' 
+                     : 'Select All'}
                   </button>
                 </div>
                 
@@ -485,31 +657,31 @@ function Invoices() {
                         <th className="px-4 py-2 w-6"></th>
                         <th className="px-4 py-2">Date</th>
                         <th className="px-4 py-2">Description</th>
-                        <th className="px-4 py-2">Duration</th>
-                        <th className="px-4 py-2">Amount</th>
+                        <th className="px-4 py-2 text-right">Duration</th>
+                        <th className="px-4 py-2 text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y dark:divide-surface-700">
-                      {getClientTimeEntries(selectedClient).length > 0 ? (
-                        getClientTimeEntries(selectedClient).map(entry => (
+                      {availableTimeEntries.length > 0 ? (
+                        availableTimeEntries.map(entry => (
                           <tr 
                             key={entry.id} 
                             className={`hover:bg-surface-50 dark:hover:bg-surface-700/50 cursor-pointer
                               ${selectedTimeEntries.includes(entry.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                             onClick={() => handleTimeEntrySelection(entry.id)}
                           >
-                            <td className="px-4 py-2">
+                            <td className="px-4 py-2 text-center">
                               <input 
                                 type="checkbox" 
                                 checked={selectedTimeEntries.includes(entry.id)}
-                                onChange={() => {}}
+                                readOnly
                                 className="h-4 w-4 rounded border-surface-300 dark:border-surface-600 text-primary focus:ring-primary"
                               />
                             </td>
                             <td className="px-4 py-2">{formatDate(entry.date)}</td>
-                            <td className="px-4 py-2">{entry.description}</td>
-                            <td className="px-4 py-2">{entry.duration.toFixed(2)} hours</td>
-                            <td className="px-4 py-2">{formatCurrency(entry.duration * entry.rate)}</td>
+                            <td className="px-4 py-2">{entry.description || `Work for ${getClient(entry.clientId)?.name || 'client'}`}</td>
+                            <td className="px-4 py-2 text-right">{parseFloat(entry.duration).toFixed(2)} hrs</td>
+                            <td className="px-4 py-2 text-right">{formatCurrency(entry.duration * entry.rate)}</td>
                           </tr>
                         ))
                       ) : (
@@ -523,20 +695,24 @@ function Invoices() {
                   </table>
                 </div>
                 
+                {formErrors.timeEntries && (
+                  <p className="text-red-600 text-sm mt-1">{formErrors.timeEntries}</p>
+                )}
+                
                 {selectedTimeEntries.length > 0 && (
                   <div className="mt-4 text-right">
                     <p className="font-medium">
                       Total: {formatCurrency(
                         timeEntries
                           .filter(entry => selectedTimeEntries.includes(entry.id))
-                          .reduce((sum, entry) => sum + (entry.duration * entry.rate), 0)
+                          .reduce((sum, entry) => sum + (parseFloat(entry.duration) * parseFloat(entry.rate)), 0)
                       )}
                     </p>
                   </div>
                 )}
               </div>
             )}
-            
+
             <div className="flex justify-end space-x-2">
               <button 
                 onClick={() => setShowInvoiceForm(false)}
@@ -545,9 +721,10 @@ function Invoices() {
                 Cancel
               </button>
               <button 
-                onClick={handleGenerateInvoice}
+                onClick={() => validateForm() && handleGenerateInvoice()}
                 className="btn-primary"
-                disabled={!selectedClient || selectedTimeEntries.length === 0}
+                disabled={isSubmitting || !selectedClient || selectedTimeEntries.length === 0}
+                aria-busy={isSubmitting}
               >
                 Generate Invoice
               </button>
@@ -558,7 +735,7 @@ function Invoices() {
       
       {/* Invoice Preview Modal */}
       {showInvoicePreview && currentInvoice && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="w-full max-w-4xl bg-white dark:bg-surface-800 rounded-xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-semibold">Invoice Preview</h3>
@@ -664,7 +841,7 @@ function Invoices() {
                 onClick={handleClosePreview}
                 className="btn-outline"
               >
-                Close
+                onClick={() => toast.info("PDF generation would be implemented here")}
               </button>
               <button 
                 onClick={() => {/* This would download the invoice as PDF */}}
@@ -672,10 +849,10 @@ function Invoices() {
               >
                 <Download size={16} className="mr-2" />
                 Download Invoice
+        </div>
               </button>
-            </div>
-          </div>
-      )}
+    </motion.div>
+  );}export default Invoices;
       </motion.div>
 export default Invoices;
   );
